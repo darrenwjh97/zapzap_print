@@ -1,7 +1,7 @@
 FROM python:3.11-slim
 
-# cups-client provides lpr so the print bot can send jobs to the host Mac's CUPS
-RUN apt-get update && apt-get install -y --no-install-recommends cups-client \
+# cups-bsd provides lpr; cups-client provides lpstat and other CUPS tools
+RUN apt-get update && apt-get install -y --no-install-recommends cups-bsd cups-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
