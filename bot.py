@@ -116,12 +116,12 @@ def fit_to_paper(img: Image.Image) -> Image.Image:
 
 def send_to_printer(jpeg_path: str, copies: int) -> None:
     cmd = ["lpr", "-#", str(copies), "-o", "media=ME_10x15", "-o", "fit-to-page"]
-    cups_server = os.getenv("CUPS_SERVER")
-    if cups_server:
-        cmd += ["-H", cups_server]
     if PRINTER_NAME:
         cmd += ["-P", PRINTER_NAME]
     cmd.append(jpeg_path)
+    # CUPS_SERVER env var (set in docker-compose.yml) routes lpr to the host CUPS.
+    # Don't use -H here: lpr's -H flag does not parse the /version=1.1 suffix
+    # required to negotiate IPP 1.1 with macOS CUPS.
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"lpr failed: {result.stderr.strip()}")
