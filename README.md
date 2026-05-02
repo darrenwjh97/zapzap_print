@@ -35,7 +35,36 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ---
 
-## Setup
+## Quick deploy with Docker (recommended)
+
+On any Mac with the printer attached and Docker Desktop installed:
+
+```bash
+# 1. Allow Docker to talk to the Mac's CUPS server (one-time)
+sudo cupsctl --remote-any
+
+# 2. Make sure the printer name matches PRINTER_NAME in .env
+lpstat -p
+
+# 3. Clone, configure, run
+git clone https://github.com/darrenwjh97/zapzap_print.git
+cd zapzap_print
+cp .env.example .env             # then edit .env with your real tokens
+docker compose up -d --build
+
+# Check it's working — should see config printed and "Bot started"
+docker compose logs print-bot
+
+# Stop / restart / update
+docker compose down
+docker compose pull && docker compose up -d --build
+```
+
+If `docker compose logs print-bot` shows `lpr failed` errors, double-check that `PRINTER_NAME` in `.env` matches what `lpstat -p` shows.
+
+---
+
+## Setup (native, without Docker)
 
 ### 1. Install dependencies
 
