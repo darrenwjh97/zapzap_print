@@ -1,22 +1,8 @@
-version: '3.8'
-
 services:
-  print-bot:
-    build: .
-    command: python3 bot.py
-    env_file: .env
-    environment:
-      LOG_FILE: /data/print_log.jsonl
-      GALLERY_LOG_FILE: /data/gallery_log.jsonl
-      LOG_ARCHIVE_DIR: /data/logs
-      # Note: CUPS routing to the host Mac is configured in /etc/cups/client.conf
-      # inside the container (see Dockerfile). Run `sudo cupsctl --remote-any`
-      # on the Mac once to allow remote CUPS access.
-    volumes:
-      - botdata:/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    restart: unless-stopped
+  # NOTE: bot.py is NOT in this compose file because it needs direct access to
+  # the macOS CUPS socket via lpr, which doesn't work cleanly from inside a
+  # Linux container (IPP version mismatch). Run bot.py natively on the Mac
+  # with the printer attached — see the README for instructions.
 
   monitor-bot:
     build: .
@@ -28,7 +14,7 @@ services:
       SESSIONS_FILE: /data/.sessions
       INK_ALERT_FLAG: /data/.ink_alerted
     volumes:
-      - botdata:/data
+      - ./:/data
     restart: unless-stopped
 
   gallery-bot:
@@ -39,8 +25,5 @@ services:
       GALLERY_LOG_FILE: /data/gallery_log.jsonl
       GALLERY_SESSIONS_FILE: /data/.gallery_sessions
     volumes:
-      - botdata:/data
+      - ./:/data
     restart: unless-stopped
-
-volumes:
-  botdata:

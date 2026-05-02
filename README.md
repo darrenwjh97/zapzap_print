@@ -35,32 +35,46 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ---
 
-## Quick deploy with Docker (recommended)
+## Quick deploy (hybrid: native print bot + dockerized monitor/gallery)
 
-On any Mac with the printer attached and Docker Desktop installed:
+`bot.py` runs natively on the Mac because it needs direct access to the local CUPS server via `lpr`. The monitor and gallery bots run in Docker since they have no system dependencies.
 
 ```bash
-# 1. Allow Docker to talk to the Mac's CUPS server (one-time)
-sudo cupsctl --remote-any
-
-# 2. Make sure the printer name matches PRINTER_NAME in .env
-lpstat -p
-
-# 3. Clone, configure, run
+# Clone and configure
 git clone https://github.com/darrenwjh97/zapzap_print.git
 cd zapzap_print
-cp .env.example .env             # then edit .env with your real tokens
+cp .env.example .env              # edit .env with your real tokens
+
+# Confirm printer name matches PRINTER_NAME in .env
+lpstat -p
+
+# Install Python deps for the print bot (use venv to keep things tidy)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Start the print bot natively in the background
+nohup python bot.py >> /tmp/print-bot.log 2>&1 &
+
+# Start monitor + gallery in Docker
 docker compose up -d --build
 
-# Check it's working — should see config printed and "Bot started"
-docker compose logs print-bot
-
-# Stop / restart / update
-docker compose down
-docker compose pull && docker compose up -d --build
+# Check everything is running
+tail /tmp/print-bot.log
+docker compose logs --tail=20
 ```
 
-If `docker compose logs print-bot` shows `lpr failed` errors, double-check that `PRINTER_NAME` in `.env` matches what `lpstat -p` shows.
+**Stop / restart / update:**
+```bash
+# Stop print bot
+pkill -f "python bot.py"
+# Stop monitor + gallery
+docker compose down
+# Update after `git pull`
+docker compose up -d --build
+```
+
+If a Telegram error mentions `lpr failed`, check that `PRINTER_NAME` in `.env` exactly matches what `lpstat -p` shows.
 
 ---
 
