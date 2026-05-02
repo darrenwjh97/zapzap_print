@@ -1,0 +1,20 @@
+# Secrets
+.env
+
+# Runtime state
+.sessions
+.gallery_sessions
+.ink_alerted
+
+# Logs (live data, not source code)
+print_log.jsonl
+gallery_log.jsonl
+logs/
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+*.pyo

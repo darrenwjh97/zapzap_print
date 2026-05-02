@@ -1,0 +1,41 @@
+PRINTER COMMANDS REFERENCE
+==========================
+
+CHECK PRINTERS
+--------------
+lpstat -p                              # list all connected printers and status
+lpoptions -p MITSUBISHI_CPD90D -l     # list all options for the printer
+
+CHECK PRINT QUEUE
+-----------------
+lpq -P MITSUBISHI_CPD90D              # show jobs in queue
+cancel -a MITSUBISHI_CPD90D           # cancel all jobs in queue
+
+TEST PRINT
+----------
+lpr -P MITSUBISHI_CPD90D -o PageSize=ME_10x15 photo.jpg
+
+PAPER SIZES (Mitsubishi CPD90D)
+--------------------------------
+ME_9x13    = 9x13 cm  (~3.5x5 in)   [default loaded]
+ME_10x15   = 10x15 cm (~4x6 in)     [use this for 4x6 paper]
+ME_13x18   = 13x18 cm (~5x7 in)
+ME_15x20   = 15x20 cm (~6x8 in)
+
+CUPS ERROR LOG
+--------------
+tail -20 /var/log/cups/error_log      # check last 20 lines of error log
+
+BOT
+---
+python bot.py                         # run the bot
+
+LAUNCHD (run bot on startup)
+-----------------------------
+launchctl load ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
+launchctl unload ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
+
+LOGS (when running via launchd)
+--------------------------------
+tail -f /tmp/telegram-print-bot.log
+tail -f /tmp/telegram-print-bot.err
