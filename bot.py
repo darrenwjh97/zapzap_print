@@ -16,7 +16,7 @@ from telegram.ext import ApplicationBuilder, MessageHandler, CommandHandler, fil
 load_dotenv()
 
 # --- Config ---
-BOT_TOKEN = "8671660282:AAE9o0d-wkKTmFcvor5zhDFaUnlWJQLy6ZY"
+BOT_TOKEN = os.getenv("PRINT_BOT_TOKEN", "")
 PRINTER_NAME = "MITSUBISHI_CPD90D"
 PAPER_W_PX = 1772   # landscape width at 300 DPI (15 cm / ME_10x15)
 PAPER_H_PX = 1181   # landscape height at 300 DPI (10 cm / ME_10x15)
@@ -420,8 +420,8 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def main() -> None:
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
-        raise SystemExit("Set BOT_TOKEN in bot.py before running.")
+    if not BOT_TOKEN:
+        raise SystemExit("Set PRINT_BOT_TOKEN in .env before running.")
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))

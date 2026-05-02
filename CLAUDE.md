@@ -82,7 +82,7 @@ All runtime config lives in `.env`. Copy `.env.example` to `.env` and fill in va
 
 | Variable | Value | Purpose |
 |---|---|---|
-| `BOT_TOKEN` | *(set in file)* | Print bot token (must match PRINT_BOT_TOKEN) |
+| `BOT_TOKEN` | `os.getenv("PRINT_BOT_TOKEN")` | Print bot token — loaded from `.env` |
 | `PRINTER_NAME` | `MITSUBISHI_CPD90D` | Target printer (`None` = system default) |
 | `PAPER_W_PX` / `PAPER_H_PX` | `1772` / `1181` | Canvas at 300 DPI for 10×15 cm |
 | `MAX_COPIES` | `20` | Cap on copies per photo |

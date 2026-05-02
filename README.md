@@ -85,7 +85,7 @@ GALLERY_CHANNEL_ID=-1001234567890
 GALLERY_LOG_FILE=gallery_log.jsonl
 ```
 
-Also open `bot.py` and update `BOT_TOKEN` at the top to match your `PRINT_BOT_TOKEN`.
+All three bot tokens are loaded from `.env` — no edits to the Python files needed.
 
 ### 6. Add to `.gitignore`
 
