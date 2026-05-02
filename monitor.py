@@ -28,8 +28,8 @@ RIBBON_CAPACITY = int(os.getenv("RIBBON_CAPACITY", "700"))
 INK_ALERT_THRESHOLD = int(os.getenv("INK_ALERT_THRESHOLD", "100"))
 LOG_FILE = os.getenv("LOG_FILE", "print_log.jsonl")
 LOG_ARCHIVE_DIR = os.getenv("LOG_ARCHIVE_DIR", "logs")
-SESSIONS_FILE = ".sessions"
-INK_ALERT_FLAG = ".ink_alerted"
+SESSIONS_FILE = os.getenv("SESSIONS_FILE", ".sessions")
+INK_ALERT_FLAG = os.getenv("INK_ALERT_FLAG", ".ink_alerted")
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",

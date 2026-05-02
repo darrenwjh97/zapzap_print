@@ -20,7 +20,7 @@ load_dotenv()
 GALLERY_BOT_TOKEN = os.getenv("GALLERY_BOT_TOKEN", "")
 MONITOR_PASSWORD = os.getenv("MONITOR_PASSWORD", "changeme")
 GALLERY_LOG_FILE = os.getenv("GALLERY_LOG_FILE", "gallery_log.jsonl")
-GALLERY_SESSIONS_FILE = ".gallery_sessions"
+GALLERY_SESSIONS_FILE = os.getenv("GALLERY_SESSIONS_FILE", ".gallery_sessions")
 BATCH_SIZE = 20
 
 logging.basicConfig(

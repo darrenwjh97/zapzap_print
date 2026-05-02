@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  print-bot:
+    build: .
+    command: python3 bot.py
+    env_file: .env
+    environment:
+      LOG_FILE: /data/print_log.jsonl
+      GALLERY_LOG_FILE: /data/gallery_log.jsonl
+      LOG_ARCHIVE_DIR: /data/logs
+      # Routes lpr inside the container to the host Mac's CUPS server
+      # Run `sudo cupsctl --remote-any` on the Mac once to allow this
+      CUPS_SERVER: host.docker.internal
+    volumes:
+      - botdata:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  monitor-bot:
+    build: .
+    command: python3 monitor.py
+    env_file: .env
+    environment:
+      LOG_FILE: /data/print_log.jsonl
+      LOG_ARCHIVE_DIR: /data/logs
+      SESSIONS_FILE: /data/.sessions
+      INK_ALERT_FLAG: /data/.ink_alerted
+    volumes:
+      - botdata:/data
+    restart: unless-stopped
+
+  gallery-bot:
+    build: .
+    command: python3 gallery.py
+    env_file: .env
+    environment:
+      GALLERY_LOG_FILE: /data/gallery_log.jsonl
+      GALLERY_SESSIONS_FILE: /data/.gallery_sessions
+    volumes:
+      - botdata:/data
+    restart: unless-stopped
+
+volumes:
+  botdata:
