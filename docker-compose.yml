@@ -9,9 +9,11 @@ services:
       LOG_FILE: /data/print_log.jsonl
       GALLERY_LOG_FILE: /data/gallery_log.jsonl
       LOG_ARCHIVE_DIR: /data/logs
-      # Routes lpr inside the container to the host Mac's CUPS server
-      # Run `sudo cupsctl --remote-any` on the Mac once to allow this
-      CUPS_SERVER: host.docker.internal
+      # Routes lpr inside the container to the host Mac's CUPS server.
+      # /version=1.1 is required because macOS CUPS rejects the default IPP 2.0
+      # negotiation from Linux cups-client.
+      # Run `sudo cupsctl --remote-any` on the Mac once to allow this.
+      CUPS_SERVER: host.docker.internal/version=1.1
     volumes:
       - botdata:/data
     extra_hosts:
