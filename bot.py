@@ -116,6 +116,9 @@ def fit_to_paper(img: Image.Image) -> Image.Image:
 
 def send_to_printer(jpeg_path: str, copies: int) -> None:
     cmd = ["lpr", "-#", str(copies), "-o", "media=ME_10x15", "-o", "fit-to-page"]
+    cups_server = os.getenv("CUPS_SERVER")
+    if cups_server:
+        cmd += ["-H", cups_server]
     if PRINTER_NAME:
         cmd += ["-P", PRINTER_NAME]
     cmd.append(jpeg_path)
