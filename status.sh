@@ -38,6 +38,11 @@ check_bot() {
     echo
 }
 
+# Try .pids first (manual ./run.sh), fall back to launchctl (auto-start)
+launchd_pid() {
+    launchctl list 2>/dev/null | awk -v label="com.local.zapzap.$1" '$3 == label && $1 != "-" { print $1 }'
+}
+
 if [ -f ".pids" ]; then
     PRINT_PID=$(grep "^print_bot=" .pids 2>/dev/null | cut -d= -f2 | tr -d '\r\n ')
     MONITOR_PID=$(grep "^monitor_bot=" .pids 2>/dev/null | cut -d= -f2 | tr -d '\r\n ')
@@ -47,6 +52,10 @@ else
     MONITOR_PID=""
     GALLERY_PID=""
 fi
+
+[ -z "$PRINT_PID" ]   && PRINT_PID=$(launchd_pid print_bot)
+[ -z "$MONITOR_PID" ] && MONITOR_PID=$(launchd_pid monitor_bot)
+[ -z "$GALLERY_PID" ] && GALLERY_PID=$(launchd_pid gallery_bot)
 
 check_bot print_bot "$PRINT_PID"
 check_bot monitor_bot "$MONITOR_PID"
