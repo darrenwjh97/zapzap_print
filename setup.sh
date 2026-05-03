@@ -97,22 +97,15 @@ elif [ -f ".env.example" ]; then
     echo "Open .env and fill in your Telegram bot tokens and password."
 else
     cat > .env <<'EOF'
-BOT_TOKEN=YOUR_PRINT_BOT_TOKEN
+PRINT_BOT_TOKEN=YOUR_PRINT_BOT_TOKEN
 MONITOR_BOT_TOKEN=YOUR_MONITOR_BOT_TOKEN
 GALLERY_BOT_TOKEN=YOUR_GALLERY_BOT_TOKEN
-PRINT_BOT_TOKEN=YOUR_PRINT_BOT_TOKEN
 GALLERY_CHANNEL_ID=YOUR_CHANNEL_ID
 MONITOR_PASSWORD=changeme
-PRINTER_NAME=MITSUBISHI_CPD90D
 RIBBON_CAPACITY=700
 INK_ALERT_THRESHOLD=100
-MAX_COPIES=20
-MAX_FILE_SIZE_MB=20
-MIN_PRINT_PX=1200
-PRINT_TIME_PER_COPY_SECONDS=12
 LOG_FILE=print_log.jsonl
 GALLERY_LOG_FILE=gallery_log.jsonl
-QUEUE_FILE=queue.jsonl
 LOG_ARCHIVE_DIR=logs
 EOF
     ok ".env created. Open it and fill in your bot tokens and password."
@@ -154,12 +147,11 @@ echo "╚═══════════════════════�
 echo
 echo "Next steps:"
 echo "  1. Open .env and fill in:"
-echo "     - BOT_TOKEN (print bot, from @BotFather)"
-echo "     - MONITOR_BOT_TOKEN (monitor bot, from @BotFather)"
-echo "     - GALLERY_BOT_TOKEN (gallery bot, from @BotFather)"
+echo "     - PRINT_BOT_TOKEN, MONITOR_BOT_TOKEN, GALLERY_BOT_TOKEN (from @BotFather)"
 echo "     - GALLERY_CHANNEL_ID (from @userinfobot)"
 echo "     - MONITOR_PASSWORD (choose any password)"
-echo "     - PRINTER_NAME (from lpstat -p)"
-echo "  2. Install the CP-D90DW driver if not already installed"
+echo "  2. If lpstat -p shows a printer name other than MITSUBISHI_CPD90D,"
+echo "     edit PRINTER_NAME on line 20 of bot.py"
 echo "  3. Run: ./run.sh to start all bots"
 echo "  4. Run: ./status.sh to verify all bots are running"
+echo "  5. (Optional) Run: ./install-autostart.sh for production auto-start"

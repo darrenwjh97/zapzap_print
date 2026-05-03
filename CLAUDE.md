@@ -6,84 +6,93 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A three-bot Telegram photobooth print system running on macOS:
 
-- **`bot.py`** — the public-facing print bot. Receives single photos and multi-photo albums from users, prints on a Mitsubishi CP-D90DW via `lpr` on 10×15 cm (ME_10x15) paper. Posts every successful print to a private Telegram channel and logs to both `print_log.jsonl` and `gallery_log.jsonl`.
-- **`monitor.py`** — a private admin bot. Password-protected. Polls `print_log.jsonl` every 10 s, provides stats/alerts/ink tracking/queue visibility.
-- **`gallery.py`** — a private gallery query bot. Password-protected. Reads `gallery_log.jsonl` to answer search queries (`/latest`, `/gallery`, `/photos`, `/count`) and resends photos.
+- **`bot.py`** — public-facing print bot. Receives single photos and multi-photo albums from users, prints on a Mitsubishi CP-D90DW via `lpr` on 10×15 cm (ME_10x15) paper. Posts every successful print to a private Telegram channel and logs to both `print_log.jsonl` and `gallery_log.jsonl`.
+- **`monitor.py`** — private admin bot. Password-protected. Polls `print_log.jsonl` every 10 s, provides stats/alerts/ink tracking/queue visibility.
+- **`gallery.py`** — private gallery query bot. Password-protected. Reads `gallery_log.jsonl` to answer search queries (`/latest`, `/gallery`, `/photos`, `/count`) and resends photos.
 
 Dependencies: `python-telegram-bot==21.6`, `pillow>=10.0`, `python-dotenv>=1.0`.
+
+**Python version**: 3.9–3.13 (3.12 recommended). **Python 3.14 is not supported** — `python-telegram-bot 21.6` calls `asyncio.get_event_loop()` which was removed in 3.14, causing the bots to crash on startup. `setup.sh` enforces this.
 
 ## File structure
 
 ```
 .
-├── bot.py                        # Print bot
-├── monitor.py                    # Admin monitor bot
-├── gallery.py                    # Gallery query bot
-├── .env                          # Secrets and config (never commit)
-├── .env.example                  # Safe-to-commit template
+├── bot.py / monitor.py / gallery.py   # The three bots
 ├── requirements.txt
-├── print_log.jsonl               # One JSON line per print attempt (success + failure)
-├── gallery_log.jsonl             # One JSON line per successful print (gallery bot's file_ids)
-├── logs/
-│   └── print_log_YYYY_MM.jsonl   # Monthly archives of print_log
-├── .sessions                     # Persisted monitor bot auth sessions
-├── .gallery_sessions             # Persisted gallery bot auth sessions
-└── .ink_alerted                  # Flag: low-ink alert sent for this ribbon roll
+├── .env / .env.example                # Runtime config (.env never committed)
+│
+├── setup.sh                           # One-time setup on a new Mac
+├── run.sh / stop.sh / status.sh       # Manual lifecycle for development / events
+├── install-autostart.sh               # Register launchd agents (production)
+├── uninstall-autostart.sh             # Remove launchd agents
+│
+├── DEPLOY.md                          # Step-by-step new-Mac guide
+├── USER_GUIDE.md                      # End-user "how to send a photo" guide
+│
+├── logs/                              # Bot stdout/stderr + monthly archived print logs
+│   ├── bot.log / monitor.log / gallery.log
+│   └── print_log_YYYY_MM.jsonl
+├── print_log.jsonl                    # One JSON line per print attempt
+├── gallery_log.jsonl                  # One JSON line per successful print
+├── .pids                              # PIDs from ./run.sh (auto-managed)
+├── .sessions / .gallery_sessions      # Persisted bot auth sessions
+└── .ink_alerted                       # Flag: low-ink alert sent for current ribbon
 ```
 
 ## Commands
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# Initial setup (one-time per Mac)
+./setup.sh
 
-# Run individual bots
-python bot.py
-python monitor.py
-python gallery.py
+# Manual lifecycle
+./run.sh           # start all three bots, save PIDs to .pids
+./stop.sh          # SIGTERM with 5s timeout, escalate to SIGKILL
+./status.sh        # per-bot RUNNING/STOPPED, printer state, queue, log sizes, uptime
 
-# Run all three in the background (single command)
-python bot.py >> /tmp/print-bot.log 2>&1 & python monitor.py >> /tmp/monitor-bot.log 2>&1 & python gallery.py >> /tmp/gallery-bot.log 2>&1 &
+# Production auto-start (launchd)
+./install-autostart.sh    # writes ~/Library/LaunchAgents/com.local.zapzap.{print,monitor,gallery}_bot.plist
+./uninstall-autostart.sh
 
-# Stop all background bots
-pkill -f "python bot.py" && pkill -f "python monitor.py" && pkill -f "python gallery.py"
+# Direct launchd commands
+launchctl list | grep zapzap
 
-# Tail logs
-tail -f /tmp/print-bot.log
-tail -f /tmp/monitor-bot.log
-tail -f /tmp/gallery-bot.log
+# Printer / queue
+lpstat -p          # list configured printers
+lpstat -o          # show current print queue
+cancel -a          # cancel all queued jobs
 
-# Find available printer names
-lpstat -p
-
-# Run as a persistent background service (macOS launchd)
-launchctl load ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
-launchctl unload ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
+# Logs
+tail -f logs/bot.log
+tail -f logs/monitor.log
+tail -f logs/gallery.log
 ```
+
+> Don't mix `./run.sh` with `./install-autostart.sh` — both starting the same bot triggers Telegram's "Conflict: terminated by other getUpdates request" error. `status.sh` detects bots managed either way.
 
 ## Configuration
 
-All runtime config lives in `.env`. Copy `.env.example` to `.env` and fill in values.
+All runtime config lives in `.env`. Copy `.env.example` to `.env` (or run `./setup.sh`) and fill in values.
 
-| Variable | Default | Purpose |
+| Variable | Default | Where it's used |
 |---|---|---|
-| `PRINT_BOT_TOKEN` | — | Token for bot.py from @BotFather |
-| `MONITOR_BOT_TOKEN` | — | Token for monitor.py from @BotFather |
-| `GALLERY_BOT_TOKEN` | — | Token for gallery.py and channel posting |
-| `MONITOR_PASSWORD` | `changeme` | Shared password for monitor and gallery bots |
-| `GALLERY_CHANNEL_ID` | — | Private channel chat_id (negative, e.g. -1001234567890) |
-| `RIBBON_CAPACITY` | `400` | Total prints per ribbon roll |
-| `INK_ALERT_THRESHOLD` | `50` | Alert when remaining prints fall below this |
-| `LOG_FILE` | `print_log.jsonl` | Active print log path |
-| `LOG_ARCHIVE_DIR` | `logs` | Directory for monthly archived logs |
-| `GALLERY_LOG_FILE` | `gallery_log.jsonl` | Gallery log path |
+| `PRINT_BOT_TOKEN` | — | `bot.py` (loaded as `BOT_TOKEN`), `monitor.py` (for `/lastphoto`) |
+| `MONITOR_BOT_TOKEN` | — | `monitor.py` |
+| `GALLERY_BOT_TOKEN` | — | `gallery.py` and `bot.py` (for posting to channel) |
+| `MONITOR_PASSWORD` | `changeme` | shared by `monitor.py` and `gallery.py` |
+| `GALLERY_CHANNEL_ID` | — | `bot.py` (negative chat_id, e.g. `-1001234567890`) |
+| `RIBBON_CAPACITY` | `700` | `monitor.py` |
+| `INK_ALERT_THRESHOLD` | `100` | `monitor.py` |
+| `LOG_FILE` | `print_log.jsonl` | `bot.py`, `monitor.py` |
+| `LOG_ARCHIVE_DIR` | `logs` | `monitor.py` |
+| `GALLERY_LOG_FILE` | `gallery_log.jsonl` | `bot.py`, `gallery.py` |
 
-`bot.py` also has hardcoded values at the top (not in .env):
+Hardcoded in `bot.py` (edit the file to change):
 
-| Variable | Value | Purpose |
+| Constant | Value | Purpose |
 |---|---|---|
-| `BOT_TOKEN` | `os.getenv("PRINT_BOT_TOKEN")` | Print bot token — loaded from `.env` |
-| `PRINTER_NAME` | `MITSUBISHI_CPD90D` | Target printer (`None` = system default) |
+| `PRINTER_NAME` | `"MITSUBISHI_CPD90D"` | Target CUPS printer (`None` = system default) |
 | `PAPER_W_PX` / `PAPER_H_PX` | `1772` / `1181` | Canvas at 300 DPI for 10×15 cm |
 | `MAX_COPIES` | `20` | Cap on copies per photo |
 
@@ -128,6 +137,15 @@ Fires after 1.5 s timer. Finds caption from any message in group, calls `parse_c
 - Resends photos using `GALLERY_BOT_TOKEN` + stored `file_id` (gallery bot's own IDs, always reusable).
 - Pagination: batches of 20, `/more` continues. State in memory per chat_id, reset on new command.
 
+### Deployment scripts
+
+- **`setup.sh`** — bootstraps a fresh Mac: checks macOS + Python 3.9–3.13, creates `.venv`, installs `requirements.txt`, looks for the Mitsubishi printer via `lpstat -p`, creates `.env` from `.env.example`, syntax-checks the three bot files. Refuses Python 3.14+.
+- **`run.sh`** — starts each bot via `nohup .venv/bin/python <bot>.py >> logs/<bot>.log 2>&1 &` if not already running; saves PIDs (one per line, `name=PID` format) to `.pids`. Reads `.env` to verify configuration before starting.
+- **`stop.sh`** — reads `.pids`, sends SIGTERM, waits up to 5 s, escalates to SIGKILL.
+- **`status.sh`** — per-bot RUNNING/STOPPED with last 3 log lines; printer state via `lpstat -p`; queue depth from `queue.jsonl` if present; sizes of `print_log.jsonl` / `gallery_log.jsonl` / `queue.jsonl`; uptime from `.pids` mtime. **Detects launchd-managed bots too** by parsing `launchctl list | grep zapzap`.
+- **`install-autostart.sh`** — writes three plists to `~/Library/LaunchAgents/com.local.zapzap.{print,monitor,gallery}_bot.plist` with `RunAtLoad=true` and `KeepAlive=true`, then `launchctl load`s them. Stops manual bots first.
+- **`uninstall-autostart.sh`** — `launchctl unload`s and removes the three plists.
+
 ### Log formats
 
 **`print_log.jsonl`** — one entry per print attempt:
@@ -156,4 +174,4 @@ Fires after 1.5 s timer. Finds caption from any message in group, calls `parse_c
 }
 ```
 
-monitor.py `/stats` and `/users` read current + all archived print logs. `/today` and `/history` read current only. `/ink` counts current log only (resets on rotation).
+`monitor.py` `/stats` and `/users` read current + all archived print logs. `/today` and `/history` read current only. `/ink` counts current log only (resets on rotation).

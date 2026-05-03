@@ -6,11 +6,28 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ## Requirements
 
-- macOS (uses `lpr` for printing)
-- Python 3.11+
-- Mitsubishi CP-D90DW connected and configured in CUPS
+- macOS
+- Python 3.9–3.13 (3.12 recommended; **not 3.14** — `python-telegram-bot 21.6` is incompatible)
+- Mitsubishi CP-D90DW connected via USB and added in **System Settings → Printers & Scanners**
 - Three Telegram bots created via [@BotFather](https://t.me/BotFather)
-- One private Telegram channel (for the live gallery feed)
+- One private Telegram channel for the live gallery feed
+
+---
+
+## Quick deploy
+
+For a brand-new Mac, see [DEPLOY.md](DEPLOY.md) for the full step-by-step guide. Short version:
+
+```bash
+git clone https://github.com/darrenwjh97/zapzap_print.git
+cd zapzap_print
+chmod +x *.sh
+./setup.sh                    # creates .venv, installs deps, checks printer, creates .env
+# edit .env with your tokens, password, channel ID
+./run.sh                      # start all three bots
+./status.sh                   # confirm RUNNING
+./install-autostart.sh        # (production) auto-start at login + restart on crash
+```
 
 ---
 
@@ -18,16 +35,31 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ```
 .
-├── bot.py                        # Public print bot
-├── monitor.py                    # Private admin monitor bot
-├── gallery.py                    # Private gallery query bot
+├── bot.py                        # Print bot
+├── monitor.py                    # Admin monitor bot
+├── gallery.py                    # Gallery query bot
+├── requirements.txt
 ├── .env                          # Secrets and config (never commit)
 ├── .env.example                  # Template — safe to commit
-├── requirements.txt
-├── print_log.jsonl               # Created at runtime, one JSON line per print job
-├── gallery_log.jsonl             # Created at runtime, one JSON line per successful print
-├── logs/                         # Monthly archived print logs
+│
+├── setup.sh                      # One-time setup on a new Mac
+├── run.sh                        # Start all three bots
+├── stop.sh                       # Stop all three bots
+├── status.sh                     # Check which bots are running
+├── install-autostart.sh          # Register launchd agents (auto-start at login)
+├── uninstall-autostart.sh        # Remove launchd agents
+│
+├── DEPLOY.md                     # Step-by-step new-Mac deployment guide
+├── USER_GUIDE.md                 # End-user instructions for sending photos
+│
+├── logs/                         # Bot logs + monthly archived print logs
+│   ├── bot.log
+│   ├── monitor.log
+│   ├── gallery.log
 │   └── print_log_YYYY_MM.jsonl
+├── print_log.jsonl               # One JSON line per print attempt
+├── gallery_log.jsonl             # One JSON line per successful print
+├── .pids                         # PIDs from ./run.sh (auto-managed)
 ├── .sessions                     # Persisted monitor bot auth sessions
 ├── .gallery_sessions             # Persisted gallery bot auth sessions
 └── .ink_alerted                  # Low-ink alert flag (runtime)
@@ -35,138 +67,83 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ---
 
-## Setup
+## Initial setup (one-time per Mac)
 
-### 1. Install dependencies
+### 1. Create three Telegram bots
 
-```bash
-pip install -r requirements.txt
-```
+Message [@BotFather](https://t.me/BotFather) → `/newbot` three times. Save the three tokens:
+- `PRINT_BOT_TOKEN` — public-facing photo bot
+- `MONITOR_BOT_TOKEN` — admin/stats bot
+- `GALLERY_BOT_TOKEN` — gallery query bot (also posts to the gallery channel)
 
-### 2. Create three Telegram bots
+### 2. Create the gallery channel
 
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. `/newbot` → follow prompts → copy the token → **PRINT_BOT_TOKEN**
-3. `/newbot` again → **MONITOR_BOT_TOKEN**
-4. `/newbot` again → **GALLERY_BOT_TOKEN**
+1. Telegram → New Channel → **Private** → name it (e.g. "Photobooth Gallery")
+2. Manage Channel → Administrators → Add Admin → choose the gallery bot → grant **Post Messages**
+3. Send a test message → forward it to [@userinfobot](https://t.me/userinfobot) → it returns the channel ID (negative number, e.g. `-1001234567890`) → this is your `GALLERY_CHANNEL_ID`
 
-### 3. Create the gallery channel
+### 3. Connect the printer
 
-1. In Telegram: New Channel → Private → give it a name (e.g. "Photobooth Gallery")
-2. Add the gallery bot as Administrator with **Post Messages** permission
-3. Forward any channel message to [@userinfobot](https://t.me/userinfobot) to get the `chat_id` (negative number, e.g. `-1001234567890`) → this is your **GALLERY_CHANNEL_ID**
+1. Plug the CP-D90DW into the Mac via USB.
+2. **System Settings → Printers & Scanners → Add Printer** → select the Mitsubishi → Add. macOS will install the driver.
+3. Verify: `lpstat -p` should show a line containing `MITSUBISHI`.
 
-### 4. Verify your printer name
-
-```bash
-lpstat -p
-```
-
-Use the name shown after `printer` — e.g. `MITSUBISHI_CPD90D`. Update `PRINTER_NAME` in `bot.py` if it differs.
-
-### 5. Configure `.env`
+### 4. Run setup
 
 ```bash
-cp .env.example .env
+./setup.sh
 ```
 
-Edit `.env` and fill in your values:
+This script:
+- Verifies macOS and a compatible Python (3.9–3.13)
+- Creates `.venv/` and installs `requirements.txt`
+- Checks that the Mitsubishi printer is detected
+- Creates `.env` from `.env.example`
+- Syntax-checks the three bot files
 
-```env
-PRINT_BOT_TOKEN=your_print_bot_token_here
-MONITOR_BOT_TOKEN=your_monitor_bot_token_here
-MONITOR_PASSWORD=choose_a_strong_password
-RIBBON_CAPACITY=400
-INK_ALERT_THRESHOLD=50
-LOG_FILE=print_log.jsonl
-LOG_ARCHIVE_DIR=logs
-GALLERY_BOT_TOKEN=your_gallery_bot_token_here
-GALLERY_CHANNEL_ID=-1001234567890
-GALLERY_LOG_FILE=gallery_log.jsonl
-```
+### 5. Fill in `.env`
 
-All three bot tokens are loaded from `.env` — no edits to the Python files needed.
+Open `.env` and set the values shown empty in the template. Only change `PRINTER_NAME` if `lpstat -p` shows a different name than `MITSUBISHI_CPD90D` — otherwise the default works.
 
-### 6. Add to `.gitignore`
+> Note: `PRINTER_NAME` is currently hardcoded in `bot.py` to `MITSUBISHI_CPD90D`. If your printer has a different name, edit line 20 of `bot.py`.
 
-```
-.env
-.sessions
-.gallery_sessions
-.ink_alerted
-print_log.jsonl
-gallery_log.jsonl
-logs/
-__pycache__/
-```
+### 6. Prevent the Mac from sleeping (production photobooth)
 
-### 7. Run
+When the Mac sleeps, the bots stop polling Telegram. For an always-on photobooth:
+- System Settings → Lock Screen → **Start Screen Saver when inactive**: Never
+- System Settings → Battery → Options → **Prevent automatic sleeping when the display is off**: On
 
-**Foreground (development / testing):**
+### 7. Start the bots
 
+For a one-off / event use:
 ```bash
-python bot.py       # Terminal 1 — print bot
-python monitor.py   # Terminal 2 — monitor bot
-python gallery.py   # Terminal 3 — gallery bot
+./run.sh
+./status.sh
 ```
 
-**Background (event / production):**
-
+For permanent install (auto-start at login, auto-restart on crash):
 ```bash
-python bot.py >> /tmp/print-bot.log 2>&1 & python monitor.py >> /tmp/monitor-bot.log 2>&1 & python gallery.py >> /tmp/gallery-bot.log 2>&1 &
-```
-
-Stop all:
-
-```bash
-pkill -f "python bot.py" && pkill -f "python monitor.py" && pkill -f "python gallery.py"
-```
-
-Tail logs:
-
-```bash
-tail -f /tmp/print-bot.log
-tail -f /tmp/monitor-bot.log
-tail -f /tmp/gallery-bot.log
+./install-autostart.sh
 ```
 
 ---
 
-## Run on macOS startup (launchd)
+## Day-to-day commands
 
-Create `~/Library/LaunchAgents/com.local.telegram-print-bot.plist`:
+| Action | Command |
+|---|---|
+| Start bots manually | `./run.sh` |
+| Stop bots | `./stop.sh` |
+| Health check | `./status.sh` |
+| Install auto-start | `./install-autostart.sh` |
+| Remove auto-start | `./uninstall-autostart.sh` |
+| Tail print bot log | `tail -f logs/bot.log` |
+| Tail monitor log | `tail -f logs/monitor.log` |
+| Tail gallery log | `tail -f logs/gallery.log` |
+| Check print queue | `lpstat -o` |
+| List printers | `lpstat -p` |
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.local.telegram-print-bot</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/usr/bin/python3</string>
-        <string>/path/to/autoprint/bot.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/path/to/autoprint</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/telegram-print-bot.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/telegram-print-bot.err</string>
-</dict>
-</plist>
-```
-
-```bash
-launchctl load ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
-launchctl unload ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
-```
+> Don't mix manual (`./run.sh`) and auto-start (`./install-autostart.sh`) — pick one. Running both creates duplicate bot instances and triggers Telegram's "Conflict: terminated by other getUpdates request" error.
 
 ---
 
@@ -174,7 +151,7 @@ launchctl unload ~/Library/LaunchAgents/com.local.telegram-print-bot.plist
 
 Users send photos to the bot in Telegram. It downloads, corrects rotation, scales and centre-crops to fill 10×15 cm at 300 DPI (no white borders), then prints via `lpr -o media=ME_10x15`. Every job is logged to `print_log.jsonl` and successful prints are also posted to the gallery channel and logged to `gallery_log.jsonl`.
 
-**Single photo** — add a caption to set copies:
+**Single photo** — caption controls copies:
 
 | Caption | Copies |
 |---|---|
@@ -193,11 +170,13 @@ The number of comma-separated values must match the number of photos. If they do
 
 Maximum: **20 copies** per photo.
 
+End-user-facing instructions live in [USER_GUIDE.md](USER_GUIDE.md).
+
 ---
 
 ## Monitor bot
 
-Password-protected. Send the password to authenticate. Sessions survive bot restarts.
+Password-protected. Send the password (from `MONITOR_PASSWORD`) to authenticate. Sessions persist to `.sessions` and survive bot restarts.
 
 | Command | What it returns |
 |---|---|
@@ -219,7 +198,7 @@ Password-protected. Send the password to authenticate. Sessions survive bot rest
 
 ## Gallery bot
 
-Password-protected (same password as monitor bot). Send the password to authenticate.
+Password-protected (same password as monitor bot). Reads `gallery_log.jsonl` (current ribbon only — does not look at archived logs).
 
 | Command | What it returns |
 |---|---|
@@ -231,7 +210,7 @@ Password-protected (same password as monitor bot). Send the password to authenti
 | `/logout` | End your session |
 | `/help` | List all commands |
 
-Date formats accepted: `25Apr` `25Apr2026` `25 Apr` `25 Apr 2026`
+Date formats: `25Apr` `25Apr2026` `25 Apr` `25 Apr 2026`
 
 ---
 
@@ -249,15 +228,36 @@ rm -f .ink_alerted
 
 ### Configuration reference
 
-| Variable | Default | Purpose |
+| Variable | Default | Where it's used |
 |---|---|---|
-| `PRINT_BOT_TOKEN` | — | Token for bot.py |
-| `MONITOR_BOT_TOKEN` | — | Token for monitor.py |
-| `GALLERY_BOT_TOKEN` | — | Token for gallery.py and channel posting |
-| `MONITOR_PASSWORD` | `changeme` | Shared password for monitor and gallery bots |
-| `GALLERY_CHANNEL_ID` | — | Telegram channel chat_id (negative number) |
-| `RIBBON_CAPACITY` | `400` | Total prints per ribbon roll |
-| `INK_ALERT_THRESHOLD` | `50` | Alert when remaining prints fall below this |
-| `LOG_FILE` | `print_log.jsonl` | Active print log path |
-| `LOG_ARCHIVE_DIR` | `logs` | Archive directory for rotated logs |
-| `GALLERY_LOG_FILE` | `gallery_log.jsonl` | Gallery log path |
+| `PRINT_BOT_TOKEN` | — | `bot.py` |
+| `MONITOR_BOT_TOKEN` | — | `monitor.py` |
+| `GALLERY_BOT_TOKEN` | — | `gallery.py` (also bot.py for posting to channel) |
+| `MONITOR_PASSWORD` | `changeme` | `monitor.py`, `gallery.py` |
+| `GALLERY_CHANNEL_ID` | — | `bot.py` |
+| `RIBBON_CAPACITY` | `700` | `monitor.py` |
+| `INK_ALERT_THRESHOLD` | `100` | `monitor.py` |
+| `LOG_FILE` | `print_log.jsonl` | `bot.py`, `monitor.py` |
+| `LOG_ARCHIVE_DIR` | `logs` | `monitor.py` |
+| `GALLERY_LOG_FILE` | `gallery_log.jsonl` | `bot.py`, `gallery.py` |
+
+Hardcoded in `bot.py` (edit the file to change):
+
+| Constant | Default | Purpose |
+|---|---|---|
+| `PRINTER_NAME` | `MITSUBISHI_CPD90D` | Target CUPS printer name |
+| `MAX_COPIES` | `20` | Cap on copies per photo |
+| `PAPER_W_PX` / `PAPER_H_PX` | `1772` / `1181` | Canvas at 300 DPI for 10×15 cm |
+
+---
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `Conflict: terminated by other getUpdates request` | Two instances of the same bot are running — stop one. Check both manual (`./run.sh`) and launchd (`launchctl list \| grep zapzap`). |
+| `lpr failed: printer or class does not exist` | Check `lpstat -p` matches the `PRINTER_NAME` in `bot.py` line 20 |
+| `No such file or directory: 'lpr'` | Install / re-add the printer in System Settings |
+| Bot crashes immediately on Python 3.14 | Recreate the venv with Python 3.12: `rm -rf .venv && python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt` |
+| `./status.sh` shows STOPPED right after `./run.sh` | Bots crashed — check `tail logs/bot.log` for the actual error |
+| Photos don't print but bot replies "Done!" | `lpstat -o` to see the print queue; check the printer is online and has paper |
