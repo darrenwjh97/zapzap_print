@@ -1,12 +1,14 @@
 import os
 import re
 import json
+import time
 import asyncio
 import subprocess
 import tempfile
 import logging
 from datetime import datetime, timezone
 from io import BytesIO
+from pathlib import Path
 
 from dotenv import load_dotenv
 from PIL import Image, ExifTags
@@ -228,6 +230,71 @@ async def post_to_gallery_channel(file_bytes: bytes, user, copies: int) -> None:
         )
 
 
+# --- Pause + supply state (shared with monitor.py via flag/JSON files) ---
+
+PAUSE_FILE = ".bot_paused"
+SUPPLY_FILE = ".supply_state"
+SUPPLY_LOCK = ".supply_lock"
+
+DEFAULT_PAUSE_REASON = "The printer is currently offline."
+
+DEFAULT_SUPPLY = {
+    "ribbon": {"capacity": 700, "used": 0, "reset_at": None, "reset_by": None},
+    "paper":  {"loaded": 50,    "used": 0, "reset_at": None, "reset_by": None},
+    "alerts_sent": [],
+}
+
+
+def is_paused() -> tuple[bool, str]:
+    """Returns (paused, reason). reason is empty when not paused."""
+    pause_file = Path(PAUSE_FILE)
+    if not pause_file.exists():
+        return False, ""
+    try:
+        reason = pause_file.read_text().strip()
+        return True, reason or DEFAULT_PAUSE_REASON
+    except Exception:
+        return True, DEFAULT_PAUSE_REASON
+
+
+def load_supply() -> dict:
+    """Read .supply_state or return defaults if missing/invalid."""
+    try:
+        return json.loads(Path(SUPPLY_FILE).read_text())
+    except Exception:
+        return json.loads(json.dumps(DEFAULT_SUPPLY))  # deep copy
+
+
+def save_supply(state: dict) -> None:
+    Path(SUPPLY_FILE).write_text(json.dumps(state, indent=2))
+
+
+def increment_supply_used(copies: int) -> None:
+    """Increment ribbon.used and paper.used by `copies` under a file lock.
+    Retries up to 5 times if .supply_lock is held by monitor.py."""
+    lock = Path(SUPPLY_LOCK)
+    for _ in range(5):
+        try:
+            lock.touch(exist_ok=False)
+            break
+        except FileExistsError:
+            time.sleep(0.1)
+    try:
+        state = load_supply()
+        state["ribbon"]["used"] += copies
+        state["paper"]["used"] += copies
+        save_supply(state)
+    finally:
+        lock.unlink(missing_ok=True)
+
+
+PAUSED_REPLY_TEMPLATE = (
+    "The print bot is currently offline.\n\n"
+    "Reason: {reason}\n\n"
+    "Please try again later."
+)
+
+
 INSTRUCTIONS = """📸 *Photo Print Bot — How to Use*
 
 Send a photo to print it on a 4x6 \(10x15 cm\) photo paper\.
@@ -262,6 +329,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def process_single_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle one photo or document image — same pipeline as before."""
+    paused, reason = is_paused()
+    if paused:
+        await update.effective_message.reply_text(
+            PAUSED_REPLY_TEMPLATE.format(reason=reason)
+        )
+        return
+
     message = update.effective_message
     if message.photo:
         file_obj = await message.photo[-1].get_file()
@@ -296,6 +370,7 @@ async def process_single_photo(update: Update, context: ContextTypes.DEFAULT_TYP
         finally:
             os.unlink(tmp_path)
 
+        increment_supply_used(copies)
         await message.reply_text("Done!")
         append_print_log(user, photo_file_id, copies, "success", None)
         buf.seek(0)
@@ -312,6 +387,13 @@ async def process_album(media_group_id: str, context: ContextTypes.DEFAULT_TYPE)
     updates = album_buffer.pop(media_group_id, [])
     album_timers.pop(media_group_id, None)
     if not updates:
+        return
+
+    paused, reason = is_paused()
+    if paused:
+        await updates[0].effective_message.reply_text(
+            PAUSED_REPLY_TEMPLATE.format(reason=reason)
+        )
         return
 
     # Caption is only on the first message Telegram sends
@@ -367,6 +449,7 @@ async def process_album(media_group_id: str, context: ContextTypes.DEFAULT_TYPE)
             finally:
                 os.unlink(tmp_path)
 
+            increment_supply_used(copies)
             append_print_log(user, photo.file_id, copies, "success", None)
             buf.seek(0)
             await post_to_gallery_channel(buf.read(), user, copies)
@@ -431,7 +514,11 @@ def main() -> None:
             handle_image,
         )
     )
-    logger.info("Bot started. Waiting for photos...")
+    paused, reason = is_paused()
+    if paused:
+        logger.warning("Bot started in PAUSED state: %s", reason)
+    else:
+        logger.info("Bot started — accepting photos")
     app.run_polling()
 
 
