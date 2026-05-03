@@ -21,13 +21,29 @@ echo
 
 # --- Step 2: Check Python 3 ---
 echo "Checking Python 3..."
-if ! command -v python3 >/dev/null 2>&1; then
-    err "Python 3 not found."
-    echo "Install it from https://www.python.org/downloads/ then re-run setup.sh"
+# python-telegram-bot 21.6 doesn't work on Python 3.14+ (removed asyncio APIs).
+# Prefer 3.12 or 3.11 if available, fall back to python3.
+PYTHON=""
+for candidate in python3.12 python3.11 python3; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        VER=$("$candidate" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null)
+        case "$VER" in
+            3.9|3.10|3.11|3.12|3.13)
+                PYTHON="$candidate"
+                break
+                ;;
+        esac
+    fi
+done
+
+if [ -z "$PYTHON" ]; then
+    err "No compatible Python found (need 3.9-3.13)."
+    echo "python-telegram-bot 21.6 does not yet support Python 3.14."
+    echo "Install Python 3.12 via Homebrew:  brew install python@3.12"
+    echo "Or download from https://www.python.org/downloads/release/python-3127/"
     exit 1
 fi
-PY_VERSION=$(python3 --version 2>&1)
-ok "${PY_VERSION} found."
+ok "$($PYTHON --version) found at $(command -v $PYTHON)"
 echo
 
 # --- Step 3: Create virtual environment ---
@@ -35,8 +51,8 @@ echo "Setting up virtual environment..."
 if [ -d ".venv" ]; then
     ok "Virtual environment already exists, skipping."
 else
-    python3 -m venv .venv
-    ok "Virtual environment created."
+    "$PYTHON" -m venv .venv
+    ok "Virtual environment created with $PYTHON."
 fi
 echo
 
