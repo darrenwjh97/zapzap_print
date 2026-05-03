@@ -11,15 +11,20 @@ err()  { echo -e "${RED}$1${RESET}"; }
 
 # --- Bot status ---
 echo "=== Bot Status ==="
-declare -A LOG_FILES
-LOG_FILES[print_bot]="logs/bot.log"
-LOG_FILES[monitor_bot]="logs/monitor.log"
-LOG_FILES[gallery_bot]="logs/gallery.log"
+
+logfile_for() {
+    case $1 in
+        print_bot)   echo "logs/bot.log" ;;
+        monitor_bot) echo "logs/monitor.log" ;;
+        gallery_bot) echo "logs/gallery.log" ;;
+    esac
+}
 
 check_bot() {
     local name=$1
     local pid=$2
-    local logfile=${LOG_FILES[$name]}
+    local logfile
+    logfile=$(logfile_for "$name")
 
     if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
         ok "${name} RUNNING (PID ${pid})"
