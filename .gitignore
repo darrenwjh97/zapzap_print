@@ -5,6 +5,10 @@
 .sessions
 .gallery_sessions
 .ink_alerted
+.bot_paused
+.supply_state
+.supply_lock
+.pids
 
 # Logs (live data, not source code)
 print_log.jsonl
