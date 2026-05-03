@@ -17,10 +17,10 @@ load_dotenv()
 
 # --- Config ---
 BOT_TOKEN = os.getenv("PRINT_BOT_TOKEN", "")
-PRINTER_NAME = os.getenv("PRINTER_NAME", "MITSUBISHI_CPD90D")
+PRINTER_NAME = "MITSUBISHI_CPD90D"
 PAPER_W_PX = 1772   # landscape width at 300 DPI (15 cm / ME_10x15)
 PAPER_H_PX = 1181   # landscape height at 300 DPI (10 cm / ME_10x15)
-MAX_COPIES = int(os.getenv("MAX_COPIES", "20"))
+MAX_COPIES = 20
 LOG_FILE = os.getenv("LOG_FILE", "print_log.jsonl")
 GALLERY_BOT_TOKEN = os.getenv("GALLERY_BOT_TOKEN", "")
 GALLERY_CHANNEL_ID = os.getenv("GALLERY_CHANNEL_ID", "")
@@ -119,9 +119,6 @@ def send_to_printer(jpeg_path: str, copies: int) -> None:
     if PRINTER_NAME:
         cmd += ["-P", PRINTER_NAME]
     cmd.append(jpeg_path)
-    # CUPS_SERVER env var (set in docker-compose.yml) routes lpr to the host CUPS.
-    # Don't use -H here: lpr's -H flag does not parse the /version=1.1 suffix
-    # required to negotiate IPP 1.1 with macOS CUPS.
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"lpr failed: {result.stderr.strip()}")
@@ -425,13 +422,6 @@ async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def main() -> None:
     if not BOT_TOKEN:
         raise SystemExit("Set PRINT_BOT_TOKEN in .env before running.")
-
-    cups_server = os.getenv("CUPS_SERVER", "(local)")
-    logger.info(
-        "Config: printer=%s cups=%s log=%s gallery_log=%s channel=%s",
-        PRINTER_NAME, cups_server, LOG_FILE, GALLERY_LOG_FILE,
-        GALLERY_CHANNEL_ID or "(disabled)",
-    )
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))

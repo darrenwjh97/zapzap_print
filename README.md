@@ -35,50 +35,7 @@ A three-bot system for a photobooth setup. Users send photos to the **print bot*
 
 ---
 
-## Quick deploy (hybrid: native print bot + dockerized monitor/gallery)
-
-`bot.py` runs natively on the Mac because it needs direct access to the local CUPS server via `lpr`. The monitor and gallery bots run in Docker since they have no system dependencies.
-
-```bash
-# Clone and configure
-git clone https://github.com/darrenwjh97/zapzap_print.git
-cd zapzap_print
-cp .env.example .env              # edit .env with your real tokens
-
-# Confirm printer name matches PRINTER_NAME in .env
-lpstat -p
-
-# Install Python deps for the print bot (use venv to keep things tidy)
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-
-# Start the print bot natively in the background
-nohup python bot.py >> /tmp/print-bot.log 2>&1 &
-
-# Start monitor + gallery in Docker
-docker compose up -d --build
-
-# Check everything is running
-tail /tmp/print-bot.log
-docker compose logs --tail=20
-```
-
-**Stop / restart / update:**
-```bash
-# Stop print bot
-pkill -f "python bot.py"
-# Stop monitor + gallery
-docker compose down
-# Update after `git pull`
-docker compose up -d --build
-```
-
-If a Telegram error mentions `lpr failed`, check that `PRINTER_NAME` in `.env` exactly matches what `lpstat -p` shows.
-
----
-
-## Setup (native, without Docker)
+## Setup
 
 ### 1. Install dependencies
 
